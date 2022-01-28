@@ -1,0 +1,315 @@
+---
+title: "Heart-Disease Prediction"
+author: "FINAL PROJECT Team 1 Mythili Rajaram, Abhishek Tegginamat"
+output: html_notebook
+---
+
+# Introduction
+
+This dataset has been picked up from kaggle. In this dataset, our goal is to predict the presence or absence of Heart-Disease using the a few visualizations. We built a Logistic Regression Model to predict our result and also Cross validated the results. In our dataset, the “target” area corresponds to the patient's existence of heart disease. It has an integer value between 0 (no presence) and 1 (presence) and is stored in the target column. The dependent variable is the target, and the rest of the variables are the independent variables. As we are analyzing the clinical dataset, the following variables are used in our analysis. 
+
+**Variables**
+
+- age: The person’s age in years
+- sex: The person’s sex (1 = male, 0 = female)
+- cp: The chest pain experienced (Value 1: typical angina, Value 2: atypical angina, Value 3: non-anginal pain, Value 4: asymptomatic)
+- trestbps: The person’s resting blood pressure (mm Hg on admission to the hospital)
+- chol: The person’s cholesterol measurement in mg/dl
+- fbs: The person’s fasting blood sugar (if > 120 mg/dl, 1 = true; 0 = false)
+- restecg: Resting electrocardiographic measurement (0 = normal, 1 = having ST-T wave abnormality, 2 = showing probable or definite left ventricular hypertrophy by Estes’ criteria)
+- thalach: The person’s maximum heart rate achieved
+- exang: Exercise induced angina (1 = yes; 0 = no)
+- oldpeak: ST depression induced by exercise relative to rest (‘ST’ relates to positions on the ECG plot)
+- slope: the slope of the peak exercise ST segment (Value 1: upsloping, Value 2: flat, Value 3: downsloping)
+- ca: The number of major vessels (0-3) colored by flourosopy
+- thal: A blood disorder called thalassemia (1 = normal; 2 = fixed defect; 3 = reversable defect)
+- target: Heart disease (0 = no, 1 = yes)
+
+```{r}
+library(DataExplorer)
+library(data.table)
+library(dplyr)
+library(car)
+library(psych)
+library(caret)
+library(rpart)
+library(gridExtra)
+library(ROCR)
+library(broom)
+library("tidyverse")
+library("corrplot")
+```
+
+```{r}
+str(heart)
+```
+
+```{r}
+
+##Converting categorical variables to factor variables
+heart1 <- copy(heart)
+heart1$sex <- factor(heart1$sex)
+heart1$cp <- factor(heart1$cp)
+heart1$fbs <- factor(heart1$fbs)
+heart1$restecg <- factor(heart1$restecg)
+heart1$exang <- factor(heart1$exang)
+heart1$ca <- factor(heart1$ca)
+heart1$thal <- factor(heart1$thal)
+heart1$target <- factor(heart1$target)
+
+describe(heart1)
+```
+
+
+```{r fig.width=5, fig.height=3}
+plot_histogram(heart)
+```
+
+From the above plot we see that cholesterol, age, and maximum heart rate follow a normal distribution. 
+
+# Simple Exploratory Data Analysis
+
+**Heart-disease versus Sex(1 = male; 0 = female)**
+```{r}
+attach(heart1)
+plot(target, sex, 
+   xlab="target ", ylab="sex ", pch=19)
+```
+
+**Heart-disease versus Fasting blood sugar > 120 mg/dl (1 = true; 0 = false)**
+```{r}
+plot(target, fbs,
+   xlab="target ", ylab="fasting blood sugar ", pch=19)
+```
+**Heart-disease versus Resting electrocardiographic results**
+```{r}
+plot(target,restecg, 
+   xlab="target ", ylab="Resting electrocardiographic measurement  ", pch=19)
+```
+
+**Heart-disease versus Exercise induced angina (1 = yes; 0 = no)**
+```{r}
+plot(target,exang, 
+   xlab="target ", ylab="Exercise induced angina ", pch=19)
+```
+**Heart-disease versus Number of major vessels (0-3) colored by flourosopy**
+```{r}
+plot(target,ca, 
+   xlab="target ", ylab="The number of major vessels", pch=19)
+```
+
+**Heart-disease versus Thalassemia 3 = normal; 6 = fixed defect; 7 = reversable defect**
+```{r}
+plot(target,thal, 
+   xlab="target ", ylab=" A blood disorder called thalassemia", pch=19)
+```
+
+**Boxplot of all continuous variables**
+
+```{r,fig.width=5, fig.height=3}
+plot.age <- ggplot(heart1, aes(x = target, y = age)) +
+ geom_boxplot()
+
+plot.trestbps <- ggplot(heart1, aes(x = target , y = trestbps)) +
+ geom_boxplot()
+
+plot.chol <- ggplot(heart1, aes(x = target, y = chol)) +
+ geom_boxplot()
+
+plot.thalach <- ggplot(heart1, aes(x = target , y = thalach)) +
+ geom_boxplot()
+
+plot.oldpeak <- ggplot(heart1, aes(x = target, y =oldpeak )) +
+ geom_boxplot()
+
+
+grid.arrange(plot.age, plot.trestbps, plot.chol, plot.thalach, plot.oldpeak, ncol=3, nrow=2)
+
+```
+Continous variables seem to have numerical stability, so we will not normalize them and we don't always need to.
+
+
+**Correlation Matrix**
+
+```{r, fig.width=5, fig.height=5}
+#Displaying correlation matrix
+Correlation <- cor(heart)
+#Plotting Heart Map for correlation matrix
+corrplot(Correlation, method = "circle")
+plot_correlation(heart)
+plot_correlation(heart1)
+```
+
+We find that exercise-induced angia, chest pain type, ST depression induced by exercise relative to rest, and maximum heart rate achieved are the most strongly correlated with target.
+
+Fasting blood sugar and cholesterol levels have no correlation.
+
+There is a strong correlation between the following independent variables:
+
+- slope and oldpeak
+- The thalac, exang, oldpeak, and slope are all highly correlated, as are exang and cp and thalac.
+
+**Presence and Absence of Heart-Disease**
+
+```{r}
+# Bar plot for target (Heart disease) 
+heart1$target <- as.factor(heart1$target)
+ggplot(heart1, aes(x=heart1$target, fill=heart1$target)) + 
+  geom_bar() +
+  xlab("Heart Disease") +
+  ylab("Count") +
+  ggtitle("Presence and Absence of Heart Disease") +
+  scale_fill_discrete(name = "Heart Disease", labels = c("Absence", "Presence"))
+```
+**Occurance of Heart-disease among different age groups**
+```{r}
+# Group the different ages in three groups (young, middle, old)
+young <- heart1[which((heart1$age<45)), ]
+middle <- heart1[which((heart1$age>=45)&(heart1$age<55)), ]
+elderly <- heart1[which(heart1$age>55), ]
+groups <- data.frame(age_group = c("young","middle","elderly"), group_count = c(NROW(young$age), NROW(middle$age), NROW(elderly$age)))
+#ploting different age groups
+ggplot(groups, aes(x=groups$age_group, y=groups$group_count, fill=groups$age_group)) + 
+  ggtitle("Age Analysis") +
+  xlab("Age Group")  +
+  ylab("group Count") +
+  geom_bar(stat="identity") +
+  scale_fill_discrete(name = "Age Group", labels = c("Elderly", "Middle", "Young"))
+```
+
+
+
+**Occurance of Heart-disease based on Chest pain type**
+
+```{r}
+# Bar plot for The chest pain ~ target
+ggplot(heart1, aes(x= cp, fill=target)) + 
+geom_bar() +
+xlab("Chest Pain Type") +
+ylab("Count") +
+ggtitle("Analysis of Chest Pain Experienced") +
+scale_fill_discrete(name = "Heart disease", labels = c("No", "Yes"))
+```
+
+Now let us split the dataset to train dataset and test dataset
+
+```{r}
+#TestTrain split 
+set.seed(293)
+trainIndex<-createDataPartition(y=heart1$target, p=0.7, list=FALSE)
+trainFactor<-heart1[trainIndex,]
+testFactor<-heart1[trainIndex,]
+
+describe(trainFactor)
+describe(testFactor)
+```
+
+**Feature Selection** 
+
+Feature selection is an important step in model tuning. In a nutshell, it reduces dimensionality in a dataset which improves the speed and performance of a model.
+
+The first step will be regression analysis, followed by VIF verification of multicollinearity. If the VIF is high, we will use PCA to generate a set of independent variables that explain the same amount as our original data but with less multicollinearity.
+
+PCA, in essence, generates new variables that are linear functions of the original independent variables. So it's analogous to f(g(x)), where g(x) generates a slew of variables that are functions of f. (x). In addition, for the regression, we are using a factor data set.
+
+```{r}
+vif(glm(target ~ age+sex+trestbps+chol+fbs+restecg+thalach+exang+oldpeak+slope+ca+thal, data=trainFactor, family="binomial"))
+```
+
+VIFs are very poor! So, let's just do a generic logistic regression. I'm not going to bother normalizing the continuous variables so they seem to have a very regular distribution.
+
+# Logistic Regression model
+
+```{r}
+linearMod <- glm(target ~ ., data=trainFactor, family="binomial"(link="logit"))
+summary(linearMod)
+```
+So it seems that the flouroscopy component is highly significant. According to this model, having 1-3 colored blood vessels and 0 colored blood vessels decreases the risk of the patient having heart attack. Let's equate the model to the null model (just intercept)
+
+It should be noted that sex, exang, and thalach are all statistically important.
+
+```{r}
+anova(linearMod, test="Chisq")
+library(pscl)
+pR2(linearMod)
+```
+Logit accounts for about half of the variance in the formula (R2). The discrepancy between the null deviance and the residual deviance demonstrates how well our model does in comparison to the null model (a model with only the intercept). To determine the features to eliminate, we only hold those that, when applied, result in a significant decrease in residual deviance.
+
+According to the ANOVA, the features to retain are age, sex, restecg, thalach, exang, oldpeak, ca, chol, and thal. We'll get rid of trestbps, fbs, and slope.
+
+```{r}
+summary(linearMod)
+```
+
+**Stepwise regression**
+
+This is a variation on forward selection in which all candidate variables in the model are tested to see if their importance has been decreased below the given tolerance threshold after each step in which a variable is applied. If a variable is discovered to be insignificant, it is omitted from the model.
+
+```{r}
+linearMod.step <- step(linearMod)
+```
+
+A good model is the one that has minimum AIC among all the other models. Here the final model has a lower AIC value of 170.4 and hence indicates a better fit.
+
+**Comparing Coefficients of Model1 and Model2(Step model)**
+
+```{r}
+car::compareCoefs(linearMod, linearMod.step, se = FALSE)
+```
+
+```{r}
+summary(linearMod.step)
+```
+
+
+
+# Cross-Validation of models linearMod and linearMod.step
+
+```{r}
+library(DAAG)
+CVbinary(linearMod.step)
+```
+
+We see that the accuracy of the model built is 86% but the cross validation accuracy result is 82% which is fairly good. We have scope for improving the model for sure.
+
+# ROC Curve
+
+```{r fig.width=5, fig.height=5}
+#choosing the best cut-off probabillity value to the model
+res <- predict(linearMod.step,type ="response")
+ROCR_Pred <- prediction(res,trainFactor$target)
+ROCR_perf <- performance(ROCR_Pred,"tpr","fpr")
+plot(ROCR_perf,colorize=T,print.cutoffs.at =seq(0.1,by =0.1))
+#from the graph the cut-off value = 0.6.
+```
+
+
+# Residual Plots
+
+```{r}
+plot(linearMod.step)
+```
+
+# Cooks Distance
+
+```{r}
+#checking for the influential point
+plot(linearMod.step,which=4,id.n =3)
+
+#the plot of cook_sd shows that 121 index haves higher cook_sd
+#checking for the standarg residuals error
+model.data <- augment(linearMod.step) %>% mutate(index =1:n())
+model.data %>% top_n(3,.cooksd)
+#in these case the standard residuals error<3 so that can't be considered as a influential point
+#checking for multi-collinearity
+car::vif(linearMod.step)
+#no multi-collinearity presents
+```
+
+# Conclusion
+
+Logistic Regression Model with variables like sex (sex), chest pain (cp), person's resting blood pressure (trestbps) + person's maximum heart rate(thalach), ST depression induced by exercise relative to rest (oldpeak), the slope of the peak exercise ST segment (slope), The number of major vessels (0-3) colored by flourosopy (ca), A blood disorder called thalassemia (thal) predicted an accuracy of  82% which is fairly a decent model for our prediction.  
+
+
+
+
